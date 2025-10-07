@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>เกม 1386</title>
+<style>
+:root{--bg:#f3f4f6;--tile:#fff;--accent:#ef4444}
+body{font-family:system-ui,Segoe UI,Roboto,'Noto Sans Thai',Arial; margin:0; display:flex; justify-content:center; align-items:center; min-height:100vh; background:var(--bg);}
+.wrap{width:960px; max-width:96%;}
+header{display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;}
+h1{margin:0;color:#b91c1c;font-weight:700;}
+.targets{display:flex; gap:8px;}
+.target{width:56px;height:56px;background:#fff;border-radius:8px;display:flex;justify-content:center;align-items:center;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,.08);transition:0.3s;}
+.target.found{background:var(--accent); color:#fff; transform:scale(1.1);}
+.board{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:12px;}
+.tile{background:var(--tile);border-radius:10px;height:96px;display:flex;justify-content:center;align-items:center;font-size:28px;cursor:pointer;position:relative;box-shadow:0 4px 10px rgba(2,6,23,.08);transition:0.3s;}
+.tile.cover::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,#cbd5e1,#94a3b8);border-radius:10px;}
+.tile span{visibility:hidden;color:#000;}
+.tile.revealed span{visibility:visible;}
+.controls{display:flex;gap:8px;align-items:center;margin-bottom:12px;}
+button{padding:8px 12px;border-radius:8px;border:0;background:#111827;color:#fff;cursor:pointer;}
+button.secondary{background:#6b7280;}
+.overlay{position:fixed;inset:0;background:rgba(2,6,23,.5);display:flex;justify-content:center;align-items:center;visibility:hidden;opacity:0;transition:0.2s;}
+.overlay.show{visibility:visible;opacity:1;}
+.modal{background:#fff;padding:28px;border-radius:12px;text-align:center;max-width:520px;}
+.modal h2{margin:0 0 8px 0;color:#b91c1c;font-weight:800;font-size:24px;}
+.modal p.time{margin:8px 0 0;font-size:18px;font-weight:600;color:#111;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>ทุกปัญหายาเสพติด โทร สายด่วน ป.ป.ส.</h1>
+    <div class="targets">
+      <div class="target" id="t1">1</div>
+      <div class="target" id="t3">3</div>
+      <div class="target" id="t8">8</div>
+      <div class="target" id="t6">6</div>
+    </div>
+  </header>
+
+  <div id="board" class="board"></div>
+
+  <div class="controls">
+    <div id="timer">เวลา: 0.0 วินาที</div>
+    <button id="reset">เริ่มใหม่</button>
+    <button id="showAll" class="secondary">แสดงทุกแผ่น (ทดสอบ)</button>
+  </div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <h2 id="winTitle"></h2>
+    <p class="time" id="finalTime"></p>
+    <button id="closeWin">ปิด</button>
+  </div>
+</div>
+
+<audio id="soundCorrect" src="https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg"></audio>
+<audio id="soundWrong" src="https://actions.google.com/sounds/v1/cartoon/boing.ogg"></audio>
+<audio id="soundPhone" src="https://actions.google.com/sounds/v1/alarms/telephone_ring_01.ogg"></audio>
+
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+<script>
+const boardEl = document.getElementById('board');
+const targets = ['1','3','8','6'];
+let currentIndex = 0;
+let startTime = null;
+let timerInterval = null;
+const timerEl = document.getElementById('timer');
+const overlay = document.getElementById('overlay');
+const winTitle = document.getElementById('winTitle');
+const finalTimeEl = document.getElementById('finalTime');
+const soundCorrect = document.getElementById('soundCorrect');
+const soundWrong = document.getElementById('soundWrong');
+const soundPhone = document.getElementById('soundPhone');
+
+function makeNumbers(){
+  const decoys = ['0','2','4','5','7','9','2','4','5','7','0','9'];
+  const pool = [...targets, ...decoys].slice(0,16);
+  for(let i=pool.length-1;i>0;i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [pool[i],pool[j]]=[pool[j],pool[i]];
+  }
+  return pool;
+}
+
+function render(){
+  boardEl.innerHTML='';
+  const nums = makeNumbers();
+  nums.forEach(n=>{
+    const tile=document.createElement('div');
+    tile.className='tile cover';
+    tile.innerHTML=`<span>${n}</span>`;
+    tile.setAttribute('data-number',n);
+    tile.addEventListener('click',onTileClick);
+    boardEl.appendChild(tile);
+  });
+  currentIndex=0;
+  startTime=null;
+  clearInterval(timerInterval);
+  timerEl.textContent='เวลา: 0.0 วินาที';
+  document.querySelectorAll('.target').forEach(el=>el.classList.remove('found'));
+}
+
+function updateTimer(){
+  const elapsed = (Date.now()-startTime)/1000;
+  timerEl.textContent=`เวลา: ${elapsed.toFixed(1)} วินาที`;
+}
+
+function onTileClick(e){
+  const tile=e.currentTarget;
+  if(tile.classList.contains('revealed')) return;
+  if(!startTime){startTime=Date.now();timerInterval=setInterval(updateTimer,100);}
+  const val = tile.getAttribute('data-number');
+  tile.classList.remove('cover');
+  tile.classList.add('revealed');
+  if(val===targets[currentIndex]){
+    soundCorrect.currentTime=0; soundCorrect.play();
+    document.getElementById('t'+val).classList.add('found');
+    currentIndex++;
+    if(currentIndex>=targets.length){
+      clearInterval(timerInterval);
+      setTimeout(showWin,500);
+    }
+  } else {
+    soundWrong.currentTime=0; soundWrong.play();
+    setTimeout(()=>{tile.classList.remove('revealed');tile.classList.add('cover');},700);
+  }
+}
+
+function showWin(){
+  targets.forEach(t=>{
+    const el=document.getElementById('t'+t);
+    if(el) el.classList.add('found');
+  });
+  soundPhone.currentTime=0; soundPhone.play();
+  winTitle.textContent='1386 ที่พึ่งทุกปัญหายาเสพติด';
+  finalTimeEl.textContent=`คุณใช้เวลา ${((Date.now()-startTime)/1000).toFixed(1)} วินาที 🎉`;
+  overlay.classList.add('show');
+  for(let i=0;i<5;i++){
+    setTimeout(()=>{confetti({particleCount:100,spread:70,origin:{y:0.6}});},i*400);
+  }
+}
+
+document.getElementById('reset').addEventListener('click',()=>{overlay.classList.remove('show');render();});
+document.getElementById('closeWin').addEventListener('click',()=>overlay.classList.remove('show'));
+document.getElementById('showAll').addEventListener('click',()=>{document.querySelectorAll('.tile').forEach(t=>{t.classList.remove('cover'); t.classList.add('revealed');});});
+
+render();
+</script>
+</body>
+</html>
